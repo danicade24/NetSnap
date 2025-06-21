@@ -1,182 +1,126 @@
-## 👥 División de Trabajo por Roles
+## 👥 **Guía Detallada por Roles – Trabajo Independiente en NetSnap**
 
-| Integrante | Rol                    | Responsabilidades                                          |
-| ---------- | ---------------------- | ---------------------------------------------------------- |
-| **A**      | Ansible y dispositivos | Automatización de backups y conexión con routers virtuales |
-| **B**      | Backend (Flask + DB)   | API REST, base de datos, y lógica de auditoría             |
-| **C**      | Frontend (Web)         | Dashboard web con Bootstrap, visualización y descargas     |
-
----
-
-## 📅 Guía Paso a Paso – Proyecto NetSnap (con VirtualBox)
+| Rol | Nombre sugerido         | Responsabilidad                                  |
+| --- | ----------------------- | ------------------------------------------------ |
+| A   | Automatizador (Ansible) | Conexión a routers y extracción de configuración |
+| B   | Backend Developer       | Almacenamiento y lógica API para los backups     |
+| C   | Frontend Developer      | Interfaz web y presentación de datos             |
 
 ---
 
-### 🗂️ **Día 1 – Preparación inicial (Todos)**
+### 🛠️ **Integrante A – Automatizador Ansible (dispositivos y extracción)**
 
-**Todos:**
+✅ **Meta**: Tener un *playbook* funcional que se conecta por SSH a routers virtuales y guarda sus configuraciones localmente.
 
-* Revisión de objetivos, división de tareas, elección de VyOS en VirtualBox como entorno.
-* Diagrama del sistema:
-  `Ansible ←→ Routers` ↔ `Flask API` ↔ `Base de datos` ↔ `Dashboard web`
+#### Día 1–2: Simulación de red
 
-**A** instala y configura:
-
-* VirtualBox + VyOS (o CSR1000v)
-* Habilita interfaz y SSH:
+* Instala **VirtualBox** y configura **2 routers VyOS**
+* En cada router:
 
   ```bash
-  set interfaces ethernet eth0 address 192.168.56.101/24
+  configure
   set service ssh
+  set interfaces ethernet eth0 address 192.168.56.101/24  # Router1
   commit; save; exit
   ```
 
-**B** instala:
+#### Día 3–4: Automatización independiente
 
-* Python 3, Flask, SQLAlchemy, SQLite/PostgreSQL
+* Prepara `inventario.ini`
+* Crea y prueba `backup.yml`
+* Almacena los `.txt` en una carpeta `backups/` que luego será compartida
+* Agrega fecha y nombre del host en el nombre del archivo
+* Simula fallos de red para registrar errores
 
-**C** prepara:
+#### Día 5–6: Exportar resultados
 
-* Bootstrap 5 y diseño del dashboard inicial (`base.html`)
-
----
-
-### ⚙️ **Día 2–3 – Automatización con Ansible (Responsable: A)**
-
-#### **A:**
-
-1. Crear archivo `inventario.ini`
-2. Escribir playbook `backup.yml`:
-
-   ```yaml
-   - name: Obtener configuración
-     hosts: routers
-     tasks:
-       - name: Ejecutar show configuration
-         ansible.netcommon.cli_command:
-           command: show configuration
-         register: config_output
-       - name: Guardar
-         copy:
-           content: "{{ config_output.stdout }}"
-           dest: "backups/{{ inventory_hostname }}_{{ ansible_date_time.iso8601 }}.txt"
-   ```
-3. Probar conexión:
-
-   ```bash
-   ansible -i inventario.ini routers -m ping
-   ansible-playbook -i inventario.ini backup.yml
-   ```
-4. Guardar backups en carpeta compartida `backups/`
-
----
-
-### 🖥️ **Día 4 – Backend inicial (Responsable: B)**
-
-#### **B:**
-
-1. Crear estructura:
-
-   ```
-   netsnap/
-   ├── app.py
-   ├── config.py
-   ├── models.py
-   ├── backups/
-   ```
-2. Crear modelo Backup:
-
-   ```python
-   class Backup(db.Model):
-       id = db.Column(db.Integer, primary_key=True)
-       device = db.Column(db.String(100))
-       timestamp = db.Column(db.DateTime)
-       content = db.Column(db.Text)
-   ```
-3. Inicializar base de datos y conexión
-
----
-
-### 🔌 **Día 5 – API REST (Responsable: B)**
-
-#### **B:**
-
-1. Crear rutas:
-
-   * `GET /api/backups`: lista de backups
-   * `POST /api/backups`: registrar backup
-   * `GET /api/backups/<id>/diff`: ver diferencias
-
-2. Probar con `curl` o Postman
-
----
-
-### 🌐 **Día 6–7 – Interfaz Web (Responsable: C)**
-
-#### **C:**
-
-1. Diseñar interfaz con Bootstrap
-2. Crear vistas:
-
-   * Lista de backups (`backups.html`)
-   * Comparación de backups
-   * Botón para "Ejecutar respaldo"
-3. Conectarse a API REST del backend
-
----
-
-### 🔄 **Día 8 – Integración de todo (Todos)**
-
-#### **A**:
-
-* Expone ejecución del playbook desde Flask:
+* Genera un pequeño script Python para convertir cada archivo `.txt` en un JSON que el backend pueda consumir si se lo pide:
 
   ```python
-  subprocess.run(["ansible-playbook", "backup.yml", "-i", "inventario.ini"])
+  {
+    "device": "192.168.56.101",
+    "timestamp": "2025-06-20T10:23:00",
+    "content": "<configuración aquí>"
+  }
   ```
 
-#### **B**:
+---
 
-* Conecta llamada desde frontend → API → ejecución del backup
-* Asegura que los nuevos backups se guarden en DB
+### 🧩 **Integrante B – Backend Flask + DB (API REST)**
 
-#### **C**:
+✅ **Meta**: Tener una API REST completa que reciba backups, los almacene y permita consultar y comparar versiones.
 
-* Muestra mensajes de éxito o error en el dashboard
-* Permite ver comparación de configuraciones
+#### Día 1–2: Preparar entorno
+
+* Inicia el proyecto Flask, instala dependencias
+* Usa SQLite o PostgreSQL local (tu elección)
+
+#### Día 3–4: Modelo y estructura
+
+* Crea modelo `Backup`
+* Genera funciones para guardar backups desde JSON
+
+#### Día 5–6: API REST independiente
+
+* Endpoints:
+
+  * `POST /api/backups` → Guarda backup recibido
+  * `GET /api/backups` → Lista todos
+  * `GET /api/backups/<id>` → Devuelve contenido
+  * `GET /api/backups/<id>/diff` → Devuelve comparación con anterior
+* Usa backups simulados desde archivos `.json` de prueba si el integrante A aún no entrega los reales
+
+#### Día 7: Pruebas
+
+* Prueba todo con Postman o `curl`
+* Documenta con Swagger o README simple
 
 ---
 
-### 🧪 **Día 9 – Pruebas y documentación (Todos)**
+### 🌐 **Integrante C – Frontend Flask + Bootstrap**
 
-#### **A**:
+✅ **Meta**: Crear un dashboard funcional y atractivo que consulte a la API REST (cuando esté lista) y permita descargar y comparar configuraciones.
 
-* Simula errores de conexión, prueba dispositivos caídos
+#### Día 1–2: Diseño independiente
 
-#### **B**:
+* Estructura base con Bootstrap y Flask
+* Crea plantilla general (`base.html`) con navbar
 
-* Documenta endpoints de API, pruebas unitarias
+#### Día 3–4: Mockups y simulación
 
-#### **C**:
+* Muestra tabla con dispositivos y fechas de respaldo desde un archivo JSON local
+* Simula botón de descarga y sección de comparación
 
-* Captura pantallas, documenta interfaz
+#### Día 5–6: Integración flexible
+
+* Usa `fetch()` o `axios` para conectarte a los endpoints reales del backend si ya existen
+* Si aún no están, sigue usando tus datos mock
+
+#### Día 7: Enlaces reales
+
+* Muestra backups reales
+* Botón para disparar `run-backup` si está disponible (opcional)
 
 ---
 
-### 🎤 **Día 10 – Presentación y entrega (Todos)**
+### ✅ Independencia garantizada:
 
-* Preparan presentación:
+| Tarea                         | A (Ansible)    | B (Backend) | C (Frontend)   |
+| ----------------------------- | -------------- | ----------- | -------------- |
+| Simulación de red             | ✔️             | ❌           | ❌              |
+| Generar backups               | ✔️             | 🔜          | 🔜             |
+| Crear estructura Flask        | ❌              | ✔️          | ✔️             |
+| Probar API sin backups reales | ❌              | ✔️          | ✔️ (mock data) |
+| Mostrar backups en tabla      | ❌              | ❌           | ✔️             |
+| Comparación de versiones      | ✔️ (por línea) | ✔️          | ✔️ (render)    |
 
-  * Diagrama general
-  * Demo (video o en vivo)
-  * GitHub completo:
+---
 
-    * `README.md`
-    * Instrucciones de ejecución:
+### 📦 Integración final (Día 8–10)
 
-      ```bash
-      python -m venv venv
-      source venv/bin/activate
-      pip install -r requirements.txt
-      flask run
-      ```
+Cuando cada uno termine su parte:
+
+* **A** comparte los backups
+* **B** los carga en la base de datos
+* **C** muestra la información desde la API
+
