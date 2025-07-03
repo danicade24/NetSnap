@@ -1,43 +1,53 @@
 #!/bin/bash
 
-# Set default values for SSH_USERNAME and SSH_PASSWORD if not provided
+# Variables con valores por defecto
 : ${SSH_USERNAME:=ubuntu}
 : ${SSH_PASSWORD:?"Error: SSH_PASSWORD environment variable is not set."}
 : ${SSHD_CONFIG_ADDITIONAL:=""}
 
-# Create the user with the provided username and set the password
+# Crear usuario si no existe
 if id "$SSH_USERNAME" &>/dev/null; then
     echo "User $SSH_USERNAME already exists"
 else
     useradd -ms /bin/bash "$SSH_USERNAME"
     echo "$SSH_USERNAME:$SSH_PASSWORD" | chpasswd
-    echo "User $SSH_USERNAME created with the provided password"
+    echo "User $SSH_USERNAME created with provided password"
 fi
 
-# Set the authorized keys from the AUTHORIZED_KEYS environment variable (if provided)
+# Crear carpeta .ssh con permisos correctos
+mkdir -p /home/$SSH_USERNAME/.ssh
+chown -R $SSH_USERNAME:$SSH_USERNAME /home/$SSH_USERNAME/.ssh
+chmod 700 /home/$SSH_USERNAME/.ssh
+
+# Manejar clave pública desde variable o desde archivo montado
 if [ -n "$AUTHORIZED_KEYS" ]; then
-    mkdir -p /home/$SSH_USERNAME/.ssh
     echo "$AUTHORIZED_KEYS" > /home/$SSH_USERNAME/.ssh/authorized_keys
-    chown -R $SSH_USERNAME:$SSH_USERNAME /home/$SSH_USERNAME/.ssh
-    chmod 700 /home/$SSH_USERNAME/.ssh
-    chmod 600 /home/$SSH_USERNAME/.ssh/authorized_keys
-    echo "Authorized keys set for user $SSH_USERNAME"
-    # Disable password authentication if authorized keys are provided
-    sed -i 's/PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+    echo "Authorized key set from environment variable"
+elif [ -f "/authorized_keys" ]; then
+    cp /authorized_keys /home/$SSH_USERNAME/.ssh/authorized_keys
+    echo "Authorized key copied from mounted file"
 fi
 
-# Apply additional SSHD configuration if provided
+# Permisos sobre la clave autorizada si existe
+if [ -f /home/$SSH_USERNAME/.ssh/authorized_keys ]; then
+    chown $SSH_USERNAME:$SSH_USERNAME /home/$SSH_USERNAME/.ssh/authorized_keys
+    chmod 600 /home/$SSH_USERNAME/.ssh/authorized_keys
+    sed -i 's/^PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+    echo "Password authentication disabled"
+else
+    echo "No authorized_keys found, SSH will require password"
+fi
+
+#Configuración SSHD adicional si existe
 if [ -n "$SSHD_CONFIG_ADDITIONAL" ]; then
     echo "$SSHD_CONFIG_ADDITIONAL" >> /etc/ssh/sshd_config
-    echo "Additional SSHD configuration applied"
+    echo "✅ Additional SSHD config applied"
 fi
 
-# Apply additional SSHD configuration from a file if provided
 if [ -n "$SSHD_CONFIG_FILE" ] && [ -f "$SSHD_CONFIG_FILE" ]; then
     cat "$SSHD_CONFIG_FILE" >> /etc/ssh/sshd_config
-    echo "Additional SSHD configuration from file applied"
+    echo "Additional SSHD config from file applied"
 fi
 
-# Start the SSH server
 echo "Starting SSH server..."
 exec /usr/sbin/sshd -D
