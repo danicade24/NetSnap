@@ -41,7 +41,7 @@ fi
 #Configuración SSHD adicional si existe
 if [ -n "$SSHD_CONFIG_ADDITIONAL" ]; then
     echo "$SSHD_CONFIG_ADDITIONAL" >> /etc/ssh/sshd_config
-    echo "✅ Additional SSHD config applied"
+    echo "Additional SSHD config applied"
 fi
 
 if [ -n "$SSHD_CONFIG_FILE" ] && [ -f "$SSHD_CONFIG_FILE" ]; then

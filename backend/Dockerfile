@@ -22,6 +22,9 @@ WORKDIR /code
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY netsnap_id_rsa /code/ansible/netsnap_id_rsa
+RUN chmod 600 /code/ansible/netsnap_id_rsa
+
 # Copiar el código fuente
 COPY . .
 

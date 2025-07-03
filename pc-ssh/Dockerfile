@@ -1,8 +1,8 @@
 FROM ubuntu:24.04
 
-# Variables de entorno (sobreescritas en docker-compose)
+# Variables de entorno 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV SSH_USERNAME=ubuntu
+ENV SSH_USERNAME=admin
 ENV SSHD_CONFIG_ADDITIONAL=""
 
 #Instalación de paquetes esenciales
@@ -34,8 +34,13 @@ RUN chmod +x /usr/local/bin/configure-ssh-user.sh
 RUN echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config && \
     echo "PermitRootLogin no" >> /etc/ssh/sshd_config
 
-# 🌐 8. Exponer puerto SSH
+COPY netsnap_id_rsa.pub /home/"$SSH_USERNAME"/.ssh/authorized_keys
+
+RUN chown -R "$SSH_USERNAME":"$SSH_USERNAME" /home/"$SSH_USERNAME"/.ssh && \
+    chmod 700 /home/"$SSH_USERNAME"/.ssh && \
+    chmod 600 /home/"$SSH_USERNAME"/.ssh/authorized_keys
+
+#Exponer puerto SSH
 EXPOSE 22
 
-# 🚀 9. Comando final para arrancar el contenedor
 CMD ["/usr/local/bin/configure-ssh-user.sh"]

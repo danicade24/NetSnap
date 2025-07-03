@@ -58,10 +58,11 @@ def backup_device():
         return jsonify({'error': 'Falta la IP del dispositivo'}), 400
 
     try:
-        # Comando SSH simulado: crea un backup de ejemplo
-        # Aquí luego se puede integrar Ansible en lugar de SSH manual
+        # Ruta dentro del contenedor donde montaste la clave privada
+        key_path = "/code/ansible/netsnap_id_rsa"
 
-        ssh_command = f"ssh -o StrictHostKeyChecking=no admin@{ip} 'cat /etc/hostname'"  # solo un ejemplo
+        # Comando SSH usando la clave privada
+        ssh_command = f"ssh -i {key_path} -o StrictHostKeyChecking=no admin@{ip} 'cat /etc/hostname'"
 
         result = subprocess.run(ssh_command, shell=True, capture_output=True, text=True, timeout=10)
 
