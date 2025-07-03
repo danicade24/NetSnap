@@ -1,0 +1,30 @@
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #f8f9fa;
+}
+
+h2 {
+  font-weight: 600;
+}
+
+.table td, .table th {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.badge {
+  font-size: 0.9rem;
+}
+
+button.btn {
+  font-size: 0.85rem;
+}
+
+.text-center {
+  animation: fadeIn 0.8s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
