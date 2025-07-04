@@ -1,69 +1,31 @@
 ---
-- name: Respaldo avanzado de configuración de servidores Linux
-  hosts: linux_servers
-  gather_facts: no
-  become: false  # Cambia a true si necesitas privilegios sudo
-  vars:
-    backup_base_dir: "./backups"
-    log_file_path: "./logs/backup.log"
-    timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M') }}"
-
+- name: Recolectar información y agrupar resultados
+  hosts: servidores
+  gather_facts: true
   tasks:
+    - name: Registrar información de cada máquina
+      set_fact:
+        host_info:
+          host: "{{ inventory_hostname }}"
+          ip: "{{ ansible_default_ipv4.address }}"
+          os: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+          cpu_cores: "{{ ansible_processor_cores }}"
+          cpu_model: "{{ ansible_processor[1] }}"
+          ram_mb: "{{ ansible_memtotal_mb }}"
+          disk_root_gb: "{{ ansible_mounts[0].size_total // (1024 * 1024 * 1024) }}"
+          uptime_hours: "{{ ansible_uptime_seconds | int // 3600 }}"
+      register: info_result
 
-    - name: Verificar si carpeta de backup base existe
-      ansible.builtin.file:
-        path: "{{ backup_base_dir }}"
-        state: directory
-        mode: '0755'
-      delegate_to: localhost
+    - name: Añadir info de esta máquina al grupo "resultados"
+      add_host:
+        name: "localhost"
+        groups: resultados
+        host_info: "{{ host_info }}"
 
-    - name: Crear carpeta individual por servidor
-      ansible.builtin.file:
-        path: "{{ backup_base_dir }}/{{ inventory_hostname }}"
-        state: directory
-        mode: '0755'
-      delegate_to: localhost
-
-    - name: Obtener configuración del sistema (hostname, kernel, IPs, servicios)
-      ansible.builtin.shell: |
-        echo "Hostname: $(hostname)"
-        echo "Kernel: $(uname -r)"
-        echo "IP Addresses: $(hostname -I)"
-        echo "Mounted Filesystems:"
-        df -h
-        echo "Running Services:"
-        systemctl list-units --type=service --state=running
-      register: system_info
-      ignore_errors: true
-
-    - name: Guardar información de sistema en archivo local si se obtuvo correctamente
-      local_action:
-        module: copy
-        content: "{{ system_info.stdout }}"
-        dest: "{{ backup_base_dir }}/{{ inventory_hostname }}/{{ timestamp }}.txt"
-      when: system_info is defined and not system_info.failed
-
-    - name: Registrar en log: ÉXITO
-      local_action:
-        module: lineinfile
-        path: "{{ log_file_path }}"
-        create: yes
-        line: "[{{ timestamp }}] Backup OK: {{ inventory_hostname }}"
-      when: system_info is defined and not system_info.failed
-
-    - name: Registrar en log: ERROR
-      local_action:
-        module: lineinfile
-        path: "{{ log_file_path }}"
-        create: yes
-        line: "[{{ timestamp }}] ERROR en backup: {{ inventory_hostname }}"
-      when: system_info is not defined or system_info.failed
-
-    - name: Mostrar mensaje resumen
+- name: Consolidar resultados
+  hosts: resultados
+  gather_facts: false
+  tasks:
+    - name: Mostrar información agrupada de todas las máquinas
       debug:
-        msg: >
-          {% if system_info is defined and not system_info.failed %}
-            Backup exitoso de {{ inventory_hostname }}
-          {% else %}
-            Fallo en backup de {{ inventory_hostname }}
-          {% endif %}
+        var: hostvars[inventory_hostname]['host_info']

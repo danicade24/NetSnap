@@ -9,6 +9,14 @@ app = Flask(__name__)
 def hello_world():
     return "<p>Hello, World!</p>"
 
+@app.route('/ip',methods=['GET'])
+def fet_ip():
+    target =  get_local_network() # IP 
+    print(target)
+    if not target:
+        return jsonify({'error': 'No se pudo determinar la red local'}), 500
+    return jsonify({"ip":target}), 200
+
 @app.route('/devices', methods=['GET'])
 def list_devices():
     nm = nmap.PortScanner()
