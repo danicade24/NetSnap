@@ -58,19 +58,30 @@ def backup_device():
         return jsonify({'error': 'Falta la IP del dispositivo'}), 400
 
     try:
-        # Ruta dentro del contenedor donde montaste la clave privada
+        # Ruta al playbook de Ansible
+        playbook_path = "/code/ansible/backup_pc.yml"
+        # Ruta a la clave privada (ya configurada en ansible.cfg o se pasa aquí)
         key_path = "/code/ansible/netsnap_id_rsa"
 
-        # Comando SSH usando la clave privada
-        ssh_command = f"ssh -i {key_path} -o StrictHostKeyChecking=no admin@{ip} 'cat /etc/hostname'"
+        # Comando ansible-playbook con extra-vars
+        ansible_command = (
+            f"ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook {playbook_path} "
+            f"-i {ip}, "
+            f"-u admin "
+            f"--private-key {key_path} "
+            f"--extra-vars 'target_host={ip}'"
+        )
 
-        result = subprocess.run(ssh_command, shell=True, capture_output=True, text=True, timeout=10)
+        result = subprocess.run(ansible_command, shell=True, capture_output=True, text=True, timeout=60)
 
         if result.returncode == 0:
-            output = result.stdout.strip()
-            return jsonify({'status': 'Backup exitoso', 'device_output': output})
+            return jsonify({'status': 'Backup exitoso', 'ansible_output': result.stdout})
         else:
-            return jsonify({'status': 'Error en backup', 'error': result.stderr.strip()}), 500
+            return jsonify({
+                'status': 'Error en backup',
+                'ansible_output': result.stdout,
+                'ansible_error': result.stderr
+            }), 500
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500

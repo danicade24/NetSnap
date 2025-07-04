@@ -1,0 +1,69 @@
+---
+- name: Respaldo avanzado de configuración de servidores Linux
+  hosts: linux_servers
+  gather_facts: no
+  become: false  # Cambia a true si necesitas privilegios sudo
+  vars:
+    backup_base_dir: "./backups"
+    log_file_path: "./logs/backup.log"
+    timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M') }}"
+
+  tasks:
+
+    - name: Verificar si carpeta de backup base existe
+      ansible.builtin.file:
+        path: "{{ backup_base_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+
+    - name: Crear carpeta individual por servidor
+      ansible.builtin.file:
+        path: "{{ backup_base_dir }}/{{ inventory_hostname }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+
+    - name: Obtener configuración del sistema (hostname, kernel, IPs, servicios)
+      ansible.builtin.shell: |
+        echo "Hostname: $(hostname)"
+        echo "Kernel: $(uname -r)"
+        echo "IP Addresses: $(hostname -I)"
+        echo "Mounted Filesystems:"
+        df -h
+        echo "Running Services:"
+        systemctl list-units --type=service --state=running
+      register: system_info
+      ignore_errors: true
+
+    - name: Guardar información de sistema en archivo local si se obtuvo correctamente
+      local_action:
+        module: copy
+        content: "{{ system_info.stdout }}"
+        dest: "{{ backup_base_dir }}/{{ inventory_hostname }}/{{ timestamp }}.txt"
+      when: system_info is defined and not system_info.failed
+
+    - name: Registrar en log: ÉXITO
+      local_action:
+        module: lineinfile
+        path: "{{ log_file_path }}"
+        create: yes
+        line: "[{{ timestamp }}] Backup OK: {{ inventory_hostname }}"
+      when: system_info is defined and not system_info.failed
+
+    - name: Registrar en log: ERROR
+      local_action:
+        module: lineinfile
+        path: "{{ log_file_path }}"
+        create: yes
+        line: "[{{ timestamp }}] ERROR en backup: {{ inventory_hostname }}"
+      when: system_info is not defined or system_info.failed
+
+    - name: Mostrar mensaje resumen
+      debug:
+        msg: >
+          {% if system_info is defined and not system_info.failed %}
+            Backup exitoso de {{ inventory_hostname }}
+          {% else %}
+            Fallo en backup de {{ inventory_hostname }}
+          {% endif %}
