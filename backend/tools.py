@@ -49,6 +49,26 @@ def process_ansible_result(result: str):
     except Exception as e:
         print("Error al procesar resultado:", e)
         return {}
+    
+import re
+
+def find_all_indices(text, substring):
+    return [match.start() for match in re.finditer(re.escape(substring), text)]
+
+def process_ansible_result_complete(ansible_output):
+    """
+    Procesa la salida completa de Ansible y devuelve un dict con los resultados por host.
+    """
+    results = []
+
+    idx = find_all_indices(ansible_output, "host_info")
+    
+    idx.pop(0)
+    for i, ind in enumerate(idx[:-1]):
+        results.append(process_ansible_result(ansible_output[ind-1:idx[i+1]]))
+    
+    return results
+
 
 if __name__ == "__main__":
     print(get_local_network())

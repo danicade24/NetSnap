@@ -1,13 +1,13 @@
 import requests
 
-device_ip = "172.18.0.2"
+device_ip = ["172.18.0.5"]
 
 # url
-url = "http://localhost:5000/backup"
+url = "http://localhost:5000/backup/all"
 
 # Datos a enviar
 payload = {
-    "ip": device_ip
+    "ips": device_ip
 }
 
 try:

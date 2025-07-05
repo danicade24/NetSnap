@@ -2,3 +2,4 @@ flask
 python-nmap
 netifaces
 flask-cors
+psycopg2-binary
