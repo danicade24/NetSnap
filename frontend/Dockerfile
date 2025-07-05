@@ -13,7 +13,7 @@ COPY css/ ./css/
 COPY js/ ./js/
 COPY assets/ ./assets/
 
-# (Opcional) copiar index a raíz para servir desde /
+#copiar index a raíz para servir desde /
 COPY templates/index.html ./index.html
 
 # Exponer el puerto por defecto de Nginx

@@ -35,7 +35,7 @@ function cargarVista(nombreVista) {
 
       // Mostrar IP solo en la vista principal
       if (nombreVista === "main.html") {
-        fetch("http://localhost:5000/api/ip")
+        fetch("http://localhost:5000/ip")
           .then(res => res.json())
           .then(data => {
             const ipEl = document.getElementById("ip-local");
