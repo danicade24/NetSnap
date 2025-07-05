@@ -1,31 +1,105 @@
 ---
-- name: Recolectar información y agrupar resultados
-  hosts: servidores
+- name: Recolectar información completa para backup
+  hosts: all
   gather_facts: true
+
   tasks:
-    - name: Registrar información de cada máquina
+    ### Obtener fecha y hora actual ###
+    - name: Registrar fecha y hora del backup
+      set_fact:
+        fecha_backup: "{{ ansible_date_time.date }} {{ ansible_date_time.time }}"
+
+    ### Información adicional vía comandos ###
+    - name: Obtener servicios activos (si están disponibles)
+      command: systemctl list-units --type=service --state=running
+      register: servicios_activos
+      ignore_errors: yes
+
+    - name: Obtener procesos activos si no hay systemctl
+      command: ps -eo comm
+      register: procesos_activos
+      ignore_errors: yes
+
+    - name: Obtener versión de Apache
+      command: apache2 -v
+      register: apache_version
+      ignore_errors: yes
+
+    - name: Obtener versión de MySQL
+      command: mysql --version
+      register: mysql_version
+      ignore_errors: yes
+
+    - name: Contar número total de paquetes instalados
+      command: dpkg -l | wc -l
+      register: total_paquetes
+      ignore_errors: yes
+
+    - name: Listar nombres de usuarios del sistema
+      command: getent passwd
+      register: usuarios_sistema
+
+    - name: Listar nombres de grupos del sistema
+      command: getent group
+      register: grupos_sistema
+
+    ### Cálculo de discos ###
+    - name: Calcular espacio total, libre y usado en disco raíz
+      set_fact:
+        disk_total_gb: "{{ ansible_mounts[0].size_total // (1024 * 1024 * 1024) }}"
+        disk_free_gb: "{{ ansible_mounts[0].size_available // (1024 * 1024 * 1024) }}"
+        disk_used_gb: "{{ (ansible_mounts[0].size_total - ansible_mounts[0].size_available) // (1024 * 1024 * 1024) }}"
+        punto_montaje: "{{ ansible_mounts[0].mount }}"
+
+    ### Consolidar información ###
+    - name: Registrar información consolidada en host_info
       set_fact:
         host_info:
-          host: "{{ inventory_hostname }}"
-          ip: "{{ ansible_default_ipv4.address }}"
-          os: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
-          cpu_cores: "{{ ansible_processor_cores }}"
-          cpu_model: "{{ ansible_processor[1] }}"
-          ram_mb: "{{ ansible_memtotal_mb }}"
-          disk_root_gb: "{{ ansible_mounts[0].size_total // (1024 * 1024 * 1024) }}"
-          uptime_hours: "{{ ansible_uptime_seconds | int // 3600 }}"
-      register: info_result
+          sistema:
+            hostname: "{{ ansible_fqdn }}"
+            ip: "{{ ansible_default_ipv4.address }}"
+            mac: "{{ ansible_default_ipv4.macaddress | default('') }}"
+            gateway: "{{ ansible_default_ipv4.gateway | default('') }}"
+            os: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+            kernel: "{{ ansible_kernel }}"
+            arquitectura: "{{ ansible_architecture }}"
+            cpu_modelo: "{{ ansible_processor[1] | default('Desconocido') }}"
+            cpu_cores: "{{ ansible_processor_cores }}"
+            ram_total_mb: "{{ ansible_memtotal_mb }}"
+          disco:
+            total_gb: "{{ disk_total_gb }}"
+            libre_gb: "{{ disk_free_gb }}"
+            usado_gb: "{{ disk_used_gb }}"
+            #punto_montaje: "{{ (ansible_mounts | selectattr('mount', 'equalto', '/') | list | first).mount | default(ansible_mounts[0].mount) }}"
 
-    - name: Añadir info de esta máquina al grupo "resultados"
-      add_host:
-        name: "localhost"
-        groups: resultados
-        host_info: "{{ host_info }}"
+          estado:
+            fecha_backup: "{{ fecha_backup }}"
+            uptime_horas: "{{ ansible_uptime_seconds | int // 3600 }}"
+            carga_promedio: "{{ ansible_loadavg }}"
+          usuarios_grupos:
+            usuarios: "{{ usuarios_sistema.stdout_lines | map('split', ':') | map('first') | list }}"
+            grupos: "{{ grupos_sistema.stdout_lines | map('split', ':') | map('first') | list }}"
+          software:
+            paquetes_totales: "{{ total_paquetes.stdout | default('0') | int }}"
+            apache_version: "{{ apache_version.stdout | default('No instalado') }}"
+            mysql_version: "{{ mysql_version.stdout | default('No instalado') }}"
+            servicios_activos: >-
+              {{
+                (
+                  (servicios_activos.stdout_lines 
+                    if servicios_activos.stdout_lines 
+                    else procesos_activos.stdout_lines | default([]))
+                  | reject('equalto', 'COMMAND')
+                  | unique
+                  | list
+                )
+              }}
 
-- name: Consolidar resultados
-  hosts: resultados
-  gather_facts: false
-  tasks:
-    - name: Mostrar información agrupada de todas las máquinas
+    - name: Mostrar información final consolidada
       debug:
-        var: hostvars[inventory_hostname]['host_info']
+        var: host_info
+
+    - name: Guardar host_info como JSON en /tmp/backup_info.json
+      copy:
+        content: "{{ host_info | to_nice_json }}"
+        dest: "/tmp/backup_info.json"

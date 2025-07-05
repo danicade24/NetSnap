@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request
 import nmap
-from tools import get_local_network
+from tools import *
 import subprocess
 
 app = Flask(__name__)
@@ -82,8 +82,10 @@ def backup_device():
 
         result = subprocess.run(ansible_command, shell=True, capture_output=True, text=True, timeout=60)
 
+        result_process = process_ansible_result(result.stdout)
+
         if result.returncode == 0:
-            return jsonify({'status': 'Backup exitoso', 'ansible_output': result.stdout})
+            return jsonify({'status': 'Backup exitoso', 'ansible_output': result_process})
         else:
             return jsonify({
                 'status': 'Error en backup',
