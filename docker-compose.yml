@@ -1,0 +1,37 @@
+#version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: backend
+    ports:
+      - "5000:5000"
+    cap_add:
+      - NET_RAW
+    networks:
+      - demo-net
+
+  # PC Simulado 1
+  pc1:
+    build: ./pc-ssh
+    container_name: pc1
+    environment:
+      - SSH_USERNAME=admin
+      - SSH_PASSWORD=adminpass
+    ports:
+      - "2222:22"
+    networks:
+      - demo-net
+
+
+  # PC Simulado 2
+  pc2:
+    image: alpine
+    container_name: pc2
+    command: ["sleep", "infinity"]
+    networks:
+      - demo-net
+
+networks:
+  demo-net:
+    driver: bridge
