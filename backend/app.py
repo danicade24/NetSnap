@@ -22,8 +22,6 @@ def get_ip():
         if not target:
             return jsonify({'error': 'No se pudo determinar la red local'}), 500
         
-        upsert_network(target, nombre=f'Red {target}', descripcion='Detectado automáticamente')
-
         return jsonify({"ip":target}), 200
     
     except Exception as e:
@@ -137,48 +135,25 @@ def backup_device():
     return jsonify({'status': status_global, 'resultados': resultados}), (200 if not errores else 500)
 
 @app.route('/file-data', methods=['POST'])
-def download_json_file():
+def download_json():
     try:
         data = request.get_json()
         ip = data.get('ip')
+        date = data.get('date')  # Puede estar o no
 
         if not ip:
             return jsonify({"error": "Falta el parámetro 'ip'"}), 400
 
-        json_content = get_json_data_from_ip(ip)
+        if date:
+            json_content = get_json_data(ip, date)
+            filename = f'datos_{ip}_{date}.json'.replace(':', '-')
+        else:
+            json_content = get_json_data_from_ip(ip)
+            filename = f'datos_{ip}.json'
 
         buffer = io.BytesIO()
         buffer.write(json_content.encode('utf-8'))
         buffer.seek(0)
-
-        return send_file(
-            buffer,
-            as_attachment=True,
-            download_name=f'datos_{ip}.json',
-            mimetype='application/json'
-        )
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-@app.route('/file-data', methods=['POST'])
-def download_json_with_date():
-    try:
-        data = request.get_json()
-        ip = data.get('ip')
-        date = data.get('date')
-
-        # Validaciones
-        if not ip or not date:
-            return jsonify({"error": "Faltan parámetros requeridos: 'ip' y/o 'date'"}), 400
-
-        json_content = get_json_data(ip, date)
-
-        buffer = io.BytesIO()
-        buffer.write(json_content.encode('utf-8'))
-        buffer.seek(0)
-
-        filename = f'datos_{ip}_{date}.json'.replace(':', '-')
 
         return send_file(
             buffer,
@@ -189,6 +164,39 @@ def download_json_with_date():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/download-history', methods=['POST'])
+def download_history_by_ip():
+    try:
+        data = request.get_json()
+        ip = data.get('ip')
+
+        if not ip:
+            return jsonify({"error": "Falta el parámetro 'ip'"}), 400
+
+        history = get_backup_history_by_ip(ip)
+
+        if not history:
+            return jsonify({"error": f"No se encontró historial para la IP {ip}"}), 404
+
+        json_content = json.dumps(history, indent=4, ensure_ascii=False)
+
+        buffer = io.BytesIO()
+        buffer.write(json_content.encode('utf-8'))
+        buffer.seek(0)
+
+        filename = f'historial_{ip}.json'.replace(':', '-')
+
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/json'
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/backup/all', methods=['POST'])
 def backup_all_devices():
@@ -225,6 +233,32 @@ def backup_all_devices():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/download-all-backups', methods=['GET'])
+def download_all_backups():
+    try:
+        backups = get_all_backups()
+
+        if not backups:
+            return jsonify({"error": "No se encontraron backups"}), 404
+
+        json_content = json.dumps(backups, indent=4, ensure_ascii=False)
+
+        buffer = io.BytesIO()
+        buffer.write(json_content.encode('utf-8'))
+        buffer.seek(0)
+
+        filename = 'todos_los_backups.json'
+
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/json'
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':

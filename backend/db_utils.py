@@ -157,7 +157,7 @@ def get_json_data_from_ip(ip):
     cur.execute('SELECT datos_json FROM backups WHERE ip = %s;', (ip,))
     data = cur.fetchone()
 
-    return json.dump(data)
+    return json.dumps(data)
 
 def get_json_data(ip, date):
     conn = get_db_connection()
@@ -166,7 +166,7 @@ def get_json_data(ip, date):
     cur.execute('SELECT datos_json FROM backups WHERE ip = %s AND fecha = %s;', (ip,date))
     data = cur.fetchone()
 
-    return json.dump(data)
+    return json.dumps(data)
 
 # Consultar Historial por Backup
 def get_backup_history(backup_id):
@@ -194,3 +194,29 @@ def get_backup_history(backup_id):
     conn.close()
     return history
 
+# Consultar Historial por IP
+def get_backup_history_by_ip(ip):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT h.id, h.fecha, h.status, h.usuario, h.datos_json
+        FROM backup_history h
+        JOIN backups b ON h.backup_id = b.id
+        WHERE b.ip = %s
+        ORDER BY h.fecha DESC;
+    ''', (ip,))
+    rows = cur.fetchall()
+
+    history = []
+    for row in rows:
+        history.append({
+            'history_id': row[0],
+            'fecha': row[1].isoformat() if row[1] else None,
+            'status': row[2],
+            'usuario': row[3],
+            'datos': row[4]  # JSON 
+        })
+
+    cur.close()
+    conn.close()
+    return history
