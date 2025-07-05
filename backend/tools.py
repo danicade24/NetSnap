@@ -62,8 +62,6 @@ def process_ansible_result_complete(ansible_output):
     results = []
 
     idx = find_all_indices(ansible_output, "host_info")
-    if len(idx) == 3:
-        return process_ansible_result(ansible_output)
     
     idx.pop(0)
     for i, ind in enumerate(idx[:-1]):

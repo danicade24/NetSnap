@@ -1,21 +1,33 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response, send_file
+import io
 import nmap
 from tools import *
 import subprocess
+from db_utils import *
 
 app = Flask(__name__)
+
+with app.app_context():
+    create_tables()
 
 @app.route("/")
 def hello_world():
     return "<p>Hello, World!</p>"
 
 @app.route('/ip',methods=['GET'])
-def fet_ip():
-    target =  get_local_network() # IP 
-    print(target)
-    if not target:
-        return jsonify({'error': 'No se pudo determinar la red local'}), 500
-    return jsonify({"ip":target}), 200
+def get_ip():
+    try:
+        target =  get_local_network() # IP 
+        print(target)
+        if not target:
+            return jsonify({'error': 'No se pudo determinar la red local'}), 500
+        
+        upsert_network(target, nombre=f'Red {target}', descripcion='Detectado automáticamente')
+
+        return jsonify({"ip":target}), 200
+    
+    except Exception as e:
+        return jsonify({"error":str(e)}), 500
 
 @app.route('/devices', methods=['GET'])
 def list_devices():
@@ -52,7 +64,8 @@ def list_devices():
                 'mac': nm[host]['addresses'].get('mac', 'Unknown'),
                 'hostname': nm[host].hostname() or 'Unknown',
                 'state': nm[host].state(),
-                'ssh': ssh_isopen
+                'ssh': ssh_isopen,
+                'date': get_date_ip(host) or 'Unknow'
             }
             devices.append(device_info)
 
@@ -90,6 +103,11 @@ def backup_device():
             result = subprocess.run(ansible_command, shell=True, capture_output=True, text=True, timeout=60)
             ansible_output = process_ansible_result(result.stdout)
 
+            save_backup_with_audit({"gateway": ansible_output['sistema']['gateway'],
+                                    "ip": ansible_output['sistema']['ip'],
+                                    "status": 'Backup exitoso',
+                                    "data": ansible_output})
+
             resultados.append({
                 'ip': ip,
                 'status': 'Backup exitoso' if result.returncode == 0 else 'Error en backup',
@@ -118,6 +136,60 @@ def backup_device():
 
     return jsonify({'status': status_global, 'resultados': resultados}), (200 if not errores else 500)
 
+@app.route('/file-data', methods=['POST'])
+def download_json_file():
+    try:
+        data = request.get_json()
+        ip = data.get('ip')
+
+        if not ip:
+            return jsonify({"error": "Falta el parámetro 'ip'"}), 400
+
+        json_content = get_json_data_from_ip(ip)
+
+        buffer = io.BytesIO()
+        buffer.write(json_content.encode('utf-8'))
+        buffer.seek(0)
+
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=f'datos_{ip}.json',
+            mimetype='application/json'
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/file-data', methods=['POST'])
+def download_json_with_date():
+    try:
+        data = request.get_json()
+        ip = data.get('ip')
+        date = data.get('date')
+
+        # Validaciones
+        if not ip or not date:
+            return jsonify({"error": "Faltan parámetros requeridos: 'ip' y/o 'date'"}), 400
+
+        json_content = get_json_data(ip, date)
+
+        buffer = io.BytesIO()
+        buffer.write(json_content.encode('utf-8'))
+        buffer.seek(0)
+
+        filename = f'datos_{ip}_{date}.json'.replace(':', '-')
+
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/json'
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/backup/all', methods=['POST'])
 def backup_all_devices():
     try:
@@ -137,6 +209,12 @@ def backup_all_devices():
         processed_output = process_ansible_result_complete(result.stdout)
 
         if result.returncode == 0:
+            for data in processed_output:
+                save_backup_with_audit({"gateway": data['sistema']['gateway'],
+                                    "ip": data['sistema']['ip'],
+                                    "status": 'Backup exitoso',
+                                    "data": data})
+
             return jsonify({'status': 'Backup exitoso para todos', 'ansible_output': processed_output}), 200
         else:
             return jsonify({

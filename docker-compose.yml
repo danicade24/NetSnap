@@ -8,6 +8,28 @@ services:
       - "5000:5000"
     cap_add:
       - NET_RAW
+    depends_on:
+      - postgres
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=netsnap
+      - DB_USER=admin
+      - DB_PASSWORD=adminpass
+    networks:
+      - demo-net
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_DB: netsnap
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: adminpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - demo-net
 
@@ -48,3 +70,6 @@ services:
 networks:
   demo-net:
     driver: bridge
+
+volumes:
+  postgres_data:
