@@ -11,6 +11,16 @@ services:
     networks:
       - demo-net
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "80:80"
+    networks:
+      - demo-net
+
   # PC Simulado 1
   pc1:
     build: ./pc-ssh
