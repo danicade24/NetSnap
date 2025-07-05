@@ -12,9 +12,6 @@ CORS(app)
 with app.app_context():
     create_tables()
 
-with app.app_context():
-    create_tables()
-
 @app.route("/")
 def hello_world():
     return "<p>Hello, World!</p>"
@@ -264,6 +261,50 @@ def download_all_backups():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/backup-dates', methods=['POST'])
+def obtener_fechas_backup():
+    try:
+        data = request.get_json()
+        ip = data.get('ip')
+
+        if not ip:
+            return jsonify({'error': "Falta el parámetro 'ip'"}), 400
+
+        fechas = obtener_fechas_por_ip(ip)
+
+        return jsonify({
+            'ip': ip,
+            'fechas': fechas
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/auditar', methods=['POST'])
+def auditar_cambios():
+    data = request.get_json()
+    ip = data.get('ip')
+    indices = data.get('indices')  # Lista de dos índices
+
+    if not ip or not indices or len(indices) != 2:
+        return jsonify({'error': 'Faltan datos o selección incorrecta'}), 400
+
+    fechas = obtener_fechas_por_ip(ip)
+    fecha1 = fechas[indices[0]]
+    fecha2 = fechas[indices[1]]
+
+    config1 = get_json_data(ip, fecha1)
+    config2 = get_json_data(ip, fecha2)
+
+    diferencias = comparar_configs(config1, config2)
+
+    return jsonify({
+        'ip': ip,
+        'fecha_1': fecha1,
+        'fecha_2': fecha2,
+        'diferencias': diferencias
+    })
 
 
 if __name__ == '__main__':

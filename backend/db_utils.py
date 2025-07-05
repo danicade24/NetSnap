@@ -220,3 +220,22 @@ def get_backup_history_by_ip(ip):
     cur.close()
     conn.close()
     return history
+
+def obtener_fechas_por_ip(ip):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute('''
+        SELECT a.fecha
+        FROM backup_history a
+        JOIN backups b ON a.backup_id = b.id
+        WHERE b.ip = %s
+        ORDER BY a.fecha DESC;
+    ''', (ip,))
+
+    fechas = [row[0] for row in cur.fetchall()]
+
+    cur.close()
+    conn.close()
+
+    return fechas

@@ -69,6 +69,26 @@ def process_ansible_result_complete(ansible_output):
     
     return results
 
+import difflib
+import json
+
+def comparar_configs(text1, text2):
+    try:
+        obj1 = json.loads(text1)
+        obj2 = json.loads(text2)
+
+        pretty1 = json.dumps(obj1, indent=2, ensure_ascii=False, sort_keys=True)
+        pretty2 = json.dumps(obj2, indent=2, ensure_ascii=False, sort_keys=True)
+
+        diff = difflib.unified_diff(
+            pretty1.splitlines(keepends=True),
+            pretty2.splitlines(keepends=True),
+            lineterm=""
+        )
+
+        return ''.join(diff)
+    except Exception as e:
+        return f"Error al comparar: {e}"
 
 if __name__ == "__main__":
     print(get_local_network())
