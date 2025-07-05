@@ -3,7 +3,7 @@ import requests
 device_ip = "172.18.0.2"
 
 # url
-url = "http://localhost:5000/backup"
+url = "http://localhost:5000/backup/all"
 
 # Datos a enviar
 payload = {

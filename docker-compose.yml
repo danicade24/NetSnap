@@ -32,6 +32,19 @@ services:
     networks:
       - demo-net
 
+  # PC Simulado 3
+  pc3:
+    build: ./pc-ssh
+    container_name: pc3
+    environment:
+      - SSH_USERNAME=admin
+      - SSH_PASSWORD=adminpass
+    ports:
+      - "2223:22"
+    networks:
+      - demo-net
+
+
 networks:
   demo-net:
     driver: bridge

@@ -25,6 +25,7 @@ def list_devices():
     if not target:
         return jsonify({'error': 'No se pudo determinar la red local'}), 500
 
+    ini = "[machines]\n"
     
     try:
         nm.scan(hosts=target, arguments='-sn')  
@@ -42,6 +43,9 @@ def list_devices():
             except:
                 pass 
 
+            if ssh_isopen:
+                ini = ini + f"{host}\n"
+
             #print(host)
             device_info = {
                 'ip': host,
@@ -52,6 +56,9 @@ def list_devices():
             }
             devices.append(device_info)
 
+        with open("./ansible/inventory.ini", 'w') as f:
+            f.write(ini)
+
         return jsonify({'devices': devices})
 
     except Exception as e:
@@ -60,18 +67,17 @@ def list_devices():
 @app.route('/backup', methods=['POST'])
 def backup_device():
     data = request.get_json()
-    ip = data.get('ip')
+    ips = data.get('ips')
 
-    if not ip:
-        return jsonify({'error': 'Falta la IP del dispositivo'}), 400
+    if not ips or not isinstance(ips, list):
+        return jsonify({'error': 'Faltan las IPs o el formato es incorrecto (debe ser una lista)'}), 400
 
-    try:
-        # Ruta al playbook de Ansible
-        playbook_path = "/code/ansible/backup_pc.yml"
-        # Ruta a la clave privada (ya configurada en ansible.cfg o se pasa aquí)
-        key_path = "/code/ansible/netsnap_id_rsa"
+    playbook_path = "/code/ansible/backup_pc.yml"
+    key_path = "/code/ansible/netsnap_id_rsa"
 
-        # Comando ansible-playbook con extra-vars
+    resultados = []
+
+    for ip in ips:
         ansible_command = (
             f"ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook {playbook_path} "
             f"-i {ip}, "
@@ -80,12 +86,58 @@ def backup_device():
             f"--extra-vars 'target_host={ip}'"
         )
 
-        result = subprocess.run(ansible_command, shell=True, capture_output=True, text=True, timeout=60)
+        try:
+            result = subprocess.run(ansible_command, shell=True, capture_output=True, text=True, timeout=60)
+            ansible_output = process_ansible_result(result.stdout)
 
-        result_process = process_ansible_result(result.stdout)
+            resultados.append({
+                'ip': ip,
+                'status': 'Backup exitoso' if result.returncode == 0 else 'Error en backup',
+                'ansible_output': ansible_output,
+                'ansible_error': result.stderr if result.returncode != 0 else ''
+            })
+
+        except subprocess.TimeoutExpired:
+            resultados.append({
+                'ip': ip,
+                'status': 'Error: Timeout',
+                'ansible_output': '',
+                'ansible_error': 'Timeout alcanzado al ejecutar Ansible'
+            })
+        except Exception as e:
+            resultados.append({
+                'ip': ip,
+                'status': 'Error inesperado',
+                'ansible_output': '',
+                'ansible_error': str(e)
+            })
+
+    # Verifica si alguna IP falló
+    errores = [r for r in resultados if 'Error' in r['status']]
+    status_global = 'Backup exitoso para todos' if not errores else 'Backup completado con errores'
+
+    return jsonify({'status': status_global, 'resultados': resultados}), (200 if not errores else 500)
+
+@app.route('/backup/all', methods=['POST'])
+def backup_all_devices():
+    try:
+        playbook_path = "/code/ansible/backup_pc.yml"
+        inventory_path = "/code/ansible/inventory.ini"
+        key_path = "/code/ansible/netsnap_id_rsa"
+
+        ansible_command = (
+            f"ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook {playbook_path} "
+            f"-i {inventory_path} "
+            f"-u admin "
+            f"--private-key {key_path}"
+        )
+
+        result = subprocess.run(ansible_command, shell=True, capture_output=True, text=True, timeout=300)
+
+        processed_output = process_ansible_result_complete(result.stdout)
 
         if result.returncode == 0:
-            return jsonify({'status': 'Backup exitoso', 'ansible_output': result_process})
+            return jsonify({'status': 'Backup exitoso para todos', 'ansible_output': processed_output}), 200
         else:
             return jsonify({
                 'status': 'Error en backup',
@@ -96,5 +148,6 @@ def backup_device():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)
