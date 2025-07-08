@@ -76,6 +76,25 @@ services:
     networks:
       - demo-net
 
+  # PC Simulado 4
+  pc4:
+    image: alpine
+    container_name: pc4
+    command: ["sleep", "infinity"]
+    networks:
+      - demo-net
+
+  # PC Simulado 5
+  pc5:
+    build: ./pc-ssh
+    container_name: pc5
+    environment:
+      - SSH_USERNAME=admin
+      - SSH_PASSWORD=adminpass
+    ports:
+      - "2224:22"
+    networks:
+      - demo-net
 
 networks:
   demo-net:
